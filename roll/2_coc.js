@@ -3,7 +3,7 @@ const rollbase = require('./rollbase.js');
 var variables = {};
 
 var gameName = function () {
-	return '【克蘇魯神話】 cc cc(n)1~2 ccb ccrt ccsu .dp .cc7build .cc6build .cc7bg'
+	return '【克蘇魯神話】 cc cc(n)1~2 ccb ccrt ccsu .sc .dp .cc7build .cc6build .cc7bg'
 }
 
 var gameType = function () {
@@ -15,7 +15,7 @@ var prefixs = function () {
 		second: null
 	},
 	{
-		first: /(^ccb$)|(^cc$)|(^ccn[1-2]$)|(^cc[1-2]$)|(^[.]dp$)|(^成長檢定$)|(^幕間成長$)/i,
+		first: /(^ccb$)|(^cc$)|(^ccn[1-2]$)|(^cc[1-2]$)|(^[.]dp$)|(^成長檢定$)|(^幕間成長$)|(^.sc$)/i,
 		second: /(^\d+$)|(^help$)/i
 	}
 	]
@@ -28,6 +28,7 @@ coc7版獎勵骰： cc(1~2) cc1 80 一粒獎勵骰
 coc7版懲罰骰： ccn(1~2) ccn2 80 兩粒懲罰骰
 coc7版 即時型瘋狂： 啓動語 ccrt
 coc7版 總結型瘋狂： 啓動語 ccsu
+coc7版San Check： .sc 50 1/1d10
 coc pulp版創角： 啓動語 .ccpulpbuild
 coc6版創角： 啓動語 .cc6build
 coc7版創角： 啓動語 .cc7build (歲數7-89)
@@ -62,6 +63,9 @@ var rollDiceCommand = async function ({
 	}
 	if (trigger.match(/(^ccsu$)/) != null) {
 		rply.text = await ccsu();
+	}
+	if (trigger.match(/(^.sc$)/) != null) {
+		rply.text = await sc(mainMsg);
 	}
 
 	if (trigger == 'ccb' && mainMsg[1] <= 1000) {
@@ -381,6 +385,75 @@ async function DevelopmentPhase(target, text) {
 	}
 	return result;
 }
+
+async function sc(mainMsg) {
+	if (!mainMsg || !mainMsg[0] || !mainMsg[1] || !mainMsg[2]) return;
+	let sc = (mainMsg[2].match(/^(.+)\/(.+)$/i)) ? mainMsg[2].match(/^(.+)\/(.+)$/i) : "";
+	let san = (mainMsg[1].match(/^\d+$/)) ? mainMsg[1].match(/^\d+$/) : "";
+	console.log('%c2_coc.js line:393 sc', 'color: #007acc;', sc);
+	console.log('%c2_coc.js line:394 san', 'color: #007acc;', san);
+	if (!san) return;
+	let rollSuccess = sc[1].match(/(\d+)d(\d+)/i) || "";
+	let success = (sc[1].match(/\d+$/i) && sc[1].match(/\d+$/i)[0]) || "";
+
+	let rollFail = sc[2].match(/((\d+)d(\d+))/i) || "";
+	let fail = (sc[2].match(/^\d+$/i) && sc[2].match(/^\d+$/i)[0]) || "";
+
+	console.log('rollSuccess', rollSuccess, success, rollFail, fail)
+
+	if (!(rollSuccess || success) || !(rollFail || fail)) return;
+
+	let rollDice = await rollbase.Dice(100);
+	let lossSan = 0;
+
+	switch (true) {
+		case rollDice === 100:
+			if (rollFail) {
+				lossSan = Number(rollFail[2]) * Number(rollFail[3]);
+				(isNaN(Number(sc[2].replace(rollFail[1], '')))) ? null : lossSan = lossSan + Number(sc[2].replace(rollFail[1], ''));
+			} else {
+				lossSan = fail;
+			}
+			return '大失敗，減少 ' + lossSan + ' 點San';
+		case rollDice >= 96 && rollDice <= 100 && san <= 49:
+			if (rollFail) {
+				lossSan = Number(rollFail[2]) * Number(rollFail[3]);
+				(isNaN(Number(sc[2].replace(rollFail[1], '')))) ? null : lossSan = lossSan + Number(sc[2].replace(rollFail[1], ''));
+			} else {
+				lossSan = fail;
+			}
+			return '大失敗，減少 ' + lossSan + ' 點San';
+
+		case rollDice <= san:
+			//成功
+			if (rollSuccess) {
+				lossSan = await rollbase.BuildDiceCal(sc[1]);
+			} else {
+				lossSan = Number(success);
+			}
+			if (lossSan > 0) {
+				return '成功，減少 ' + lossSan + ' 點San';
+			} else
+				return '成功，不需要減少San';
+
+		case rollDice > san:
+			if (rollFail) {
+				lossSan = await rollbase.BuildDiceCal(sc[2]);
+			} else {
+				lossSan = Number(success);
+			}
+
+			if (lossSan > 0) {
+				return '失敗，減少 ' + lossSan + ' 點San';
+			} else
+				return '失敗，不需要減少San';
+
+		default:
+			return;
+	}
+}
+
+
 
 async function ccrt() {
 	let result = '';
